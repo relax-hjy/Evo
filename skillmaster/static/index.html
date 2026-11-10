@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkillMaster · 技能通关系统</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="logo">🎯 SkillMaster</div>
+  <nav>
+    <button class="nav-btn active" data-view="dashboard">看板</button>
+    <button class="nav-btn" data-view="tree">技能树</button>
+    <button class="nav-btn" data-view="review">复习 <span id="due-badge" class="badge hidden">0</span></button>
+    <button class="nav-btn" data-view="logs">日志</button>
+  </nav>
+  <div class="streak" id="streak">🔥 0 天</div>
+</header>
+
+<main>
+  <!-- ===== 看板 ===== -->
+  <section id="view-dashboard" class="view">
+    <div id="skill-cards" class="cards"></div>
+
+    <div class="panel">
+      <h2>📌 今日任务 <span class="hint">系统按「复习到期 → 低分推进 → 新内容」自动排序</span></h2>
+      <div id="today-tasks"></div>
+    </div>
+
+    <div class="panel">
+      <h2>🏁 里程碑</h2>
+      <div id="milestones"></div>
+    </div>
+  </section>
+
+  <!-- ===== 技能树 ===== -->
+  <section id="view-tree" class="view hidden">
+    <div class="tree-head">
+      <div id="skill-tabs" class="tabs"></div>
+      <button id="add-node-btn" class="btn ghost">＋ 添加节点</button>
+    </div>
+    <div id="tree-body"></div>
+  </section>
+
+  <!-- ===== 复习 ===== -->
+  <section id="view-review" class="view hidden">
+    <div class="panel">
+      <h2>到期复习 <span class="hint">先自测再看结果：≥80 拉长间隔，&lt;60 降档重来</span></h2>
+      <div id="review-list"></div>
+    </div>
+  </section>
+
+  <!-- ===== 日志 ===== -->
+  <section id="view-logs" class="view hidden">
+    <div class="panel">
+      <h2>写一条学习日志</h2>
+      <div class="log-form">
+        <select id="log-skill"></select>
+        <input id="log-content" placeholder="今天学了什么 / 卡在哪 / 明天继续什么…">
+        <button id="log-submit" class="btn">记录</button>
+      </div>
+    </div>
+    <div class="panel"><h2>学习日志</h2><div id="log-list"></div></div>
+  </section>
+</main>
+
+<!-- ===== 打分弹窗 ===== -->
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="modal-title">打分</h3>
+    <p id="modal-evidence" class="evidence"></p>
+    <div class="score-btns">
+      <button data-score="0">0 没碰过</button>
+      <button data-score="30">30 见过</button>
+      <button data-score="60">60 能用</button>
+      <button data-score="80">80 掌握</button>
+      <button data-score="95">95 精通</button>
+    </div>
+    <textarea id="score-note" placeholder="证据：做了什么证明这个分数？（选填，会写入日志）"></textarea>
+    <div class="modal-foot">
+      <button id="modal-cancel" class="btn ghost">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 复习弹窗 ===== -->
+<div id="review-modal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="rv-title">自测</h3>
+    <p class="hint">不看资料回想这个知识点，给自己打分：</p>
+    <div class="score-btns">
+      <button data-rv="90">90 全想起来</button>
+      <button data-rv="70">70 想起大半</button>
+      <button data-rv="40">40 基本忘了</button>
+    </div>
+    <div class="modal-foot"><button id="rv-cancel" class="btn ghost">取消</button></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
