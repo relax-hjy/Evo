@@ -1,4 +1,4 @@
-/* SkillMaster 前端逻辑 */
+/* EVO 前端逻辑 */
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 
@@ -133,13 +133,15 @@ async function renderTree() {
             .map(
               (l) => `
             <div class="leaf">
-              <span class="l-title">${l.title}</span>
+              <span class="l-title" title="点击展开/收起知识点正文">${l.title}</span>
               <span class="l-ev">${l.evidence}</span>
               <div class="mini-bar"><i style="width:${l.mastery}%;background:${barColor(l.mastery)}"></i></div>
               <span class="status-chip s-${l.status}">${l.status}</span>
               ${l.next_review_at ? `<span class="status-chip s-学习中">📅 ${l.next_review_at.slice(5)}</span>` : ""}
+              ${l.question_count > 0 ? `<button class="btn ghost q-btn" data-node='${JSON.stringify(l).replace(/'/g, "&#39;")}'>例题 ${l.question_count}</button>` : ""}
               <button class="btn ghost score-btn" data-node='${JSON.stringify(l).replace(/'/g, "&#39;")}'>打分</button>
-            </div>`
+            </div>
+            <div class="leaf-content hidden" data-id="${l.id}" data-md="${l.has_markdown ? 1 : 0}">${renderContent(l.content)}</div>`
             )
             .join("") || `<div class="empty">暂无子节点</div>`}
         </div>
@@ -153,6 +155,39 @@ async function renderTree() {
   $$("#tree-body .score-btn").forEach((b) =>
     b.addEventListener("click", () => openScore(JSON.parse(b.dataset.node)))
   );
+  $$("#tree-body .q-btn").forEach((b) =>
+    b.addEventListener("click", () => openQuiz(JSON.parse(b.dataset.node)))
+  );
+  // 点知识点标题 → 展开/收起正文（有 md 课文的节点按需拉取并渲染）
+  $$("#tree-body .l-title").forEach((t) =>
+    t.addEventListener("click", async () => {
+      const panel = t.closest(".leaf").nextElementSibling;
+      if (!panel || !panel.classList.contains("leaf-content")) return;
+      const expanding = panel.classList.contains("hidden");
+      if (expanding && panel.dataset.md === "1" && !panel.dataset.loaded) {
+        try {
+          const md = await api(`/api/nodes/${panel.dataset.id}/markdown`);
+          if (md.found) {
+            panel.innerHTML = `<div class="md-body">${md.html}</div>`;
+            panel.dataset.loaded = "1";
+          }
+        } catch (e) { /* 拉取失败则回落到卡片摘要 */ }
+      }
+      panel.classList.toggle("hidden");
+    })
+  );
+}
+
+// 正文按行渲染：行首【标签】加粗，其余转义防注入
+function renderContent(content) {
+  if (!content) return `<div class="content-empty">（暂无正文——学习后可把笔记补进 seed.json）</div>`;
+  return content
+    .split("\n")
+    .map((line) => {
+      const safe = escapeHtml(line);
+      return `<div>${safe.replace(/^(【[^】]+】)/, "<b>$1</b>")}</div>`;
+    })
+    .join("");
 }
 
 function barColor(m) {
@@ -163,11 +198,11 @@ function barColor(m) {
 }
 
 /* ---------- 打分弹窗 ---------- */
-function openScore(node) {
+function openScore(node, note = "") {
   pendingNode = node;
   $("#modal-title").textContent = `打分：${node.title}`;
   $("#modal-evidence").textContent = node.evidence ? `验证方式：${node.evidence}` : "";
-  $("#score-note").value = "";
+  $("#score-note").value = note;
   $("#modal").classList.remove("hidden");
 }
 $("#modal-cancel").addEventListener("click", () => $("#modal").classList.add("hidden"));
@@ -271,6 +306,133 @@ $("#add-node-btn").addEventListener("click", async () => {
     body: { skill_id: currentSkill, title, evidence },
   });
   renderTree();
+});
+
+/* ---------- 例题答题 ---------- */
+let quiz = { node: null, items: [], idx: 0, results: {}, stats: null };
+
+async function openQuiz(node) {
+  const data = await api(`/api/nodes/${node.id}/questions`);
+  quiz = { node, items: data.questions, idx: 0, results: {}, stats: data.stats };
+  $("#quiz-title").textContent = `例题：${node.title}`;
+  $("#quiz-score-btn").classList.add("hidden");
+  $("#quiz-modal").classList.remove("hidden");
+  renderQuestion();
+}
+
+function quizStatsText() {
+  const s = quiz.stats;
+  const rate = s.attempted ? Math.round((s.correct / s.attempted) * 100) : null;
+  return `本知识点累计作答 ${s.attempted} 次 · 答对 ${s.correct} 次` +
+    (rate !== null ? `（正确率 ${rate}%）` : "");
+}
+
+function renderQuestion() {
+  const q = quiz.items[quiz.idx];
+  const res = quiz.results[q.id];
+  $("#quiz-stats").textContent = quizStatsText();
+  $("#quiz-progress").textContent = `第 ${quiz.idx + 1} / ${quiz.items.length} 题`;
+
+  const letter = (i) => (q.type === "judge" ? q.options[i] : "ABCD"[i]);
+  let html = `<div class="quiz-stem">${quiz.idx + 1}. ${q.stem}</div><div class="quiz-opts">`;
+  q.options.forEach((opt, i) => {
+    let cls = "";
+    if (res) {
+      if (letter(i) === q.answer) cls = "opt-correct";
+      else if (letter(i) === res.chosen) cls = "opt-wrong";
+    }
+    html += `<button data-letter="${letter(i)}" class="${cls}" ${res ? "disabled" : ""}>
+      <b>${letter(i)}.</b> ${opt}</button>`;
+  });
+  html += `</div>`;
+  if (res) {
+    html += `<div class="quiz-verdict ${res.correct ? "verdict-ok" : "verdict-no"}">
+      ${res.correct ? "✓ 回答正确" : `✗ 回答错误（你的答案：${res.chosen}）`}
+      </div><div class="quiz-exp">解析：${res.explanation}</div>`;
+    if (quiz.idx < quiz.items.length - 1) {
+      html += `<button id="quiz-next" class="btn">下一题 →</button>`;
+    }
+  }
+  $("#quiz-body").innerHTML = html;
+
+  if (!res) {
+    $$("#quiz-body .quiz-opts button").forEach((b) =>
+      b.addEventListener("click", () => submitAnswer(q, b.dataset.letter))
+    );
+  }
+  const next = $("#quiz-next");
+  if (next)
+    next.addEventListener("click", () => {
+      quiz.idx++;
+      renderQuestion();
+    });
+}
+
+async function submitAnswer(q, letter) {
+  const res = await api(`/api/questions/${q.id}/answer`, {
+    method: "POST",
+    body: { user_answer: letter },
+  });
+  quiz.results[q.id] = { correct: res.correct, chosen: letter, explanation: res.explanation };
+  quiz.stats = res.stats;
+  renderQuestion();
+  if (Object.keys(quiz.results).length === quiz.items.length) {
+    $("#quiz-score-btn").classList.remove("hidden");
+  }
+}
+
+$("#quiz-close").addEventListener("click", () => $("#quiz-modal").classList.add("hidden"));
+$("#quiz-score-btn").addEventListener("click", () => {
+  const right = Object.values(quiz.results).filter((r) => r.correct).length;
+  $("#quiz-modal").classList.add("hidden");
+  openScore(quiz.node, `例题 ${right}/${quiz.items.length} 正确`);
+});
+
+/* ---------- 内容目录设置 ---------- */
+$("#settings-btn").addEventListener("click", () => {
+  $("#settings-modal").classList.remove("hidden");
+  loadContentDirs();
+});
+$("#settings-close").addEventListener("click", () =>
+  $("#settings-modal").classList.add("hidden")
+);
+
+async function loadContentDirs() {
+  const data = await api("/api/settings/content-dirs");
+  $("#dir-list").innerHTML = data.dirs.length
+    ? data.dirs
+        .map(
+          (d) => `
+      <div class="dir-item">
+        <span class="dir-dot ${d.exists ? "ok" : "bad"}"></span>
+        <span class="dir-path" title="${d.path}">${d.path}</span>
+        <span class="dir-count">${d.exists ? d.lessons + " 篇课文" : "目录不存在"}</span>
+        <button class="btn ghost dir-del" data-path="${d.path}">移除</button>
+      </div>`
+        )
+        .join("")
+    : `<div class="empty">尚未添加内容目录——课文文件放哪，就把哪个目录加进来。</div>`;
+  $$("#dir-list .dir-del").forEach((b) =>
+    b.addEventListener("click", async () => {
+      await api("/api/settings/content-dirs", {
+        method: "DELETE",
+        body: { path: b.dataset.path },
+      });
+      loadContentDirs();
+    })
+  );
+}
+
+$("#dir-add").addEventListener("click", async () => {
+  const p = $("#dir-input").value.trim();
+  if (!p) return;
+  try {
+    await api("/api/settings/content-dirs", { method: "POST", body: { path: p } });
+    $("#dir-input").value = "";
+    loadContentDirs();
+  } catch (e) {
+    alert("添加失败：" + e.message);
+  }
 });
 
 function escapeHtml(s) {

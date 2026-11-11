@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SkillMaster · 技能通关系统</title>
+<title>EVO · 技能通关系统</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
-  <div class="logo">🎯 SkillMaster</div>
+  <div class="logo">🎯 EVO</div>
   <nav>
     <button class="nav-btn active" data-view="dashboard">看板</button>
     <button class="nav-btn" data-view="tree">技能树</button>
@@ -16,6 +16,7 @@
     <button class="nav-btn" data-view="logs">日志</button>
   </nav>
   <div class="streak" id="streak">🔥 0 天</div>
+  <button id="settings-btn" class="btn ghost" title="课文内容目录设置">📁 目录</button>
 </header>
 
 <main>
@@ -95,6 +96,37 @@
       <button data-rv="40">40 基本忘了</button>
     </div>
     <div class="modal-foot"><button id="rv-cancel" class="btn ghost">取消</button></div>
+  </div>
+</div>
+
+<!-- ===== 例题弹窗 ===== -->
+<div id="quiz-modal" class="modal hidden">
+  <div class="modal-box quiz-box">
+    <h3 id="quiz-title">例题</h3>
+    <div class="quiz-meta" id="quiz-stats"></div>
+    <div id="quiz-body"></div>
+    <div class="modal-foot">
+      <span id="quiz-progress" class="hint"></span>
+      <button id="quiz-score-btn" class="btn hidden">用本次结果打分</button>
+      <button id="quiz-close" class="btn ghost">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 内容目录设置弹窗 ===== -->
+<div id="settings-modal" class="modal hidden">
+  <div class="modal-box">
+    <h3>课文内容目录</h3>
+    <p class="hint" style="margin-bottom:14px">
+      知识点课文按 <b>目录\技能\主题\知识点名.md</b> 存放（例：Java\语言基础\变量与基本类型.md），
+      添加目录后系统自动识别，文件可随时用任意编辑器更新。
+    </p>
+    <div id="dir-list"></div>
+    <div class="dir-form">
+      <input id="dir-input" placeholder="例如 D:\教材\content">
+      <button id="dir-add" class="btn">添加目录</button>
+    </div>
+    <div class="modal-foot"><button id="settings-close" class="btn ghost">关闭</button></div>
   </div>
 </div>
 

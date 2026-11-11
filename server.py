@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SkillMaster 本地学习系统 — FastAPI 后端。"""
+"""EVO 本地学习系统 — FastAPI 后端。"""
 from datetime import date, datetime, timedelta
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -9,7 +9,7 @@ import os
 
 import db
 
-app = FastAPI(title="SkillMaster")
+app = FastAPI(title="EVO")
 BASE = os.path.dirname(os.path.abspath(__file__))
 
 db.init_db()

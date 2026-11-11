@@ -48,7 +48,8 @@ def init_db():
             mastery REAL DEFAULT 0,
             review_stage INTEGER DEFAULT 0,
             last_verified_at TEXT,
-            next_review_at TEXT
+            next_review_at TEXT,
+            content TEXT DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,40 +65,42 @@ def init_db():
             title TEXT NOT NULL,
             done INTEGER DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            node_id INTEGER NOT NULL REFERENCES nodes(id),
+            type TEXT NOT NULL DEFAULT 'choice',
+            stem TEXT NOT NULL,
+            options TEXT NOT NULL DEFAULT '[]',
+            answer TEXT NOT NULL,
+            explanation TEXT DEFAULT '',
+            order_index INTEGER DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS answers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_id INTEGER NOT NULL REFERENCES questions(id),
+            node_id INTEGER NOT NULL REFERENCES nodes(id),
+            answered_at TEXT NOT NULL,
+            user_answer TEXT NOT NULL,
+            correct INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_questions_node ON questions(node_id);
+        CREATE INDEX IF NOT EXISTS idx_answers_node ON answers(node_id);
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         """
     )
     conn.commit()
+    # 老库升级：nodes 缺 content 列则追加（CREATE IF NOT EXISTS 不会给已有表加列）
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(nodes)").fetchall()]
+    if "content" not in cols:
+        conn.execute("ALTER TABLE nodes ADD COLUMN content TEXT DEFAULT ''")
+        conn.commit()
     if conn.execute("SELECT COUNT(*) c FROM skills").fetchone()["c"] == 0:
-        seed(conn)
+        from seed import seed as seed_rows
+        seed_rows(conn)
     conn.close()
-
-
-def seed(conn):
-    from seed import SKILLS, MILESTONES
-    for sk in SKILLS:
-        cur = conn.execute(
-            "INSERT INTO skills(name, color, description) VALUES(?,?,?)",
-            (sk["name"], sk["color"], sk.get("description", "")),
-        )
-        sid = cur.lastrowid
-        for ti, topic in enumerate(sk["topics"]):
-            cur = conn.execute(
-                "INSERT INTO nodes(skill_id, parent_id, title, evidence, order_index)"
-                " VALUES(?,?,?,?,?)",
-                (sid, None, topic["title"], topic.get("evidence", ""), ti),
-            )
-            tid = cur.lastrowid
-            for ni, leaf in enumerate(topic.get("leaves", [])):
-                conn.execute(
-                    "INSERT INTO nodes(skill_id, parent_id, title, evidence, order_index)"
-                    " VALUES(?,?,?,?,?)",
-                    (sid, tid, leaf[0], leaf[1], ni),
-                )
-        for m in MILESTONES.get(sk["name"], []):
-            conn.execute(
-                "INSERT INTO milestones(skill_id, title) VALUES(?,?)", (sid, m)
-            )
-    conn.commit()
 
 
 def leaf_avg_mastery(conn, skill_id):
@@ -146,15 +149,20 @@ def today_tasks(conn, limit=3):
         tasks.append((dict(r), "复习到期"))
     if len(tasks) < limit:
         seen = [t[0]["id"] for t in tasks]
-        ph = ",".join("?" * len(seen)) or "NULL"
+        # 注意：seen 为空时不能拼 NOT IN (NULL)，那会把结果集全部过滤掉
+        excl = ""
+        args = [today]
+        if seen:
+            excl = " AND n.id NOT IN (" + ",".join("?" * len(seen)) + ")"
+            args += seen
         rows = conn.execute(
             f"""SELECT n.*, s.name skill_name, s.color skill_color
                 FROM nodes n JOIN skills s ON s.id=n.skill_id
                 WHERE n.mastery > 0 AND n.mastery < 80
                   AND (n.next_review_at IS NULL OR n.next_review_at > ?)
-                  AND n.id NOT IN ({ph})
+                  {excl}
                 ORDER BY n.mastery ASC LIMIT ?""",
-            [today] + seen + [limit - len(tasks)],
+            args + [limit - len(tasks)],
         ).fetchall()
         for r in rows:
             tasks.append((dict(r), "继续推进"))

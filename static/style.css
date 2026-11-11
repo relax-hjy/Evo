@@ -179,6 +179,89 @@ h2 { font-size: 16px; margin-bottom: 14px; }
 }
 .modal-foot { display: flex; justify-content: flex-end; gap: 10px; }
 
+/* 知识点正文 */
+.l-title { cursor: pointer; }
+.l-title:hover { color: var(--accent); }
+.leaf-content {
+  padding: 10px 18px 12px 34px;
+  font-size: 13px; line-height: 1.9; color: var(--dim);
+  background: rgba(79, 140, 255, .05);
+  border-bottom: 1px solid var(--line);
+}
+.leaf-content b { color: var(--text); font-weight: 600; }
+.content-empty { font-style: italic; opacity: .7; }
+
+/* 例题 */
+.q-btn { font-size: 12px; padding: 5px 10px; }
+.quiz-box { width: 560px; max-width: 92vw; }
+.quiz-meta { font-size: 12px; color: var(--dim); margin-bottom: 14px; }
+.quiz-stem { font-size: 15px; line-height: 1.7; margin-bottom: 14px; }
+.quiz-opts button {
+  display: block; width: 100%; text-align: left;
+  background: var(--card); border: 1px solid var(--line); color: var(--text);
+  padding: 10px 14px; border-radius: 8px; cursor: pointer;
+  font-size: 14px; margin-bottom: 8px; line-height: 1.5;
+}
+.quiz-opts button:hover:not(:disabled) { border-color: var(--accent); }
+.quiz-opts button:disabled { opacity: 1; cursor: default; }
+.opt-correct { border-color: var(--good) !important; background: rgba(46, 204, 113, .12) !important; }
+.opt-wrong { border-color: var(--bad) !important; background: rgba(231, 76, 60, .12) !important; }
+.quiz-verdict { font-size: 14px; font-weight: 700; margin: 12px 0 6px; }
+.verdict-ok { color: var(--good); }
+.verdict-no { color: var(--bad); }
+.quiz-exp {
+  font-size: 13px; color: var(--dim); line-height: 1.7;
+  background: var(--card); border-left: 3px solid var(--accent);
+  padding: 10px 12px; border-radius: 6px; margin-bottom: 14px;
+}
+#quiz-progress { margin-right: auto; }
+
+/* 内容目录设置 */
+.dir-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 4px; border-bottom: 1px solid var(--line); font-size: 13px;
+}
+.dir-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.dir-dot.ok { background: var(--good); }
+.dir-dot.bad { background: var(--bad); }
+.dir-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: ltr; }
+.dir-count { color: var(--dim); font-size: 12px; white-space: nowrap; }
+.dir-del { font-size: 12px; padding: 4px 10px; }
+.dir-form { display: flex; gap: 8px; margin-top: 14px; }
+.dir-form input {
+  flex: 1; background: var(--card); border: 1px solid var(--line);
+  color: var(--text); padding: 9px 12px; border-radius: 8px; font-size: 13px;
+}
+
+/* 课文（goldmark 渲染结果）排版 */
+.md-body { font-size: 13.5px; line-height: 1.9; color: var(--dim); }
+.md-body h1 { font-size: 16px; color: var(--text); margin: 14px 0 8px; }
+.md-body h2 { font-size: 15px; color: var(--text); margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.md-body h3 { font-size: 14px; color: var(--text); margin: 12px 0 6px; }
+.md-body p { margin: 8px 0; }
+.md-body ul, .md-body ol { padding-left: 22px; margin: 8px 0; }
+.md-body li { margin: 4px 0; }
+.md-body b, .md-body strong { color: var(--text); }
+.md-body code {
+  background: var(--card); border: 1px solid var(--line);
+  padding: 1px 6px; border-radius: 4px;
+  font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
+}
+.md-body pre {
+  background: #0d1117; border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; margin: 10px 0; line-height: 1.6;
+}
+.md-body pre code { background: none; border: none; padding: 0; font-size: 12.5px; color: #c9d1d9; }
+.md-body blockquote {
+  border-left: 3px solid var(--accent); padding: 4px 12px;
+  margin: 10px 0; color: var(--dim); background: rgba(79,140,255,.05);
+}
+.md-body table { border-collapse: collapse; margin: 10px 0; width: 100%; font-size: 13px; }
+.md-body th, .md-body td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
+.md-body th { background: var(--card); color: var(--text); }
+.md-body hr { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
+.md-body a { color: var(--accent); }
+
 @media (max-width: 720px) {
   header { flex-wrap: wrap; gap: 10px; padding: 12px 16px; }
   main { padding: 16px; }
