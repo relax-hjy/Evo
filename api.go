@@ -219,7 +219,7 @@ func skillTreeHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if tt, ok := topicTitle[*out[i].ParentID]; ok {
-				out[i].HasMarkdown = mdSet[tt+"/"+out[i].Title+".md"]
+				out[i].HasMarkdown = mdSet[tt+"/"+fileNameFor(out[i].Title)]
 			}
 		}
 	}
@@ -361,9 +361,9 @@ func addNodeHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, 422, "title: Field required")
 		return
 	}
-	// 标题将参与课文文件路径拼接，禁止路径字符
+	// 标题将参与课文文件名映射（非法字符转全角），仅拒绝空与点路径
 	if !safeComponent(*body.Title) {
-		jsonError(w, 422, "title 含有非法字符（/ \\ : * ? \" < > | 或 . ..）")
+		jsonError(w, 422, "title 不能为空或 . ..")
 		return
 	}
 	evidence := ""

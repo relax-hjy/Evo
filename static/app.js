@@ -399,6 +399,7 @@ $("#settings-close").addEventListener("click", () =>
 
 async function loadContentDirs() {
   const data = await api("/api/settings/content-dirs");
+  $("#data-dir-label").textContent = `数据目录：${data.data_dir}`;
   $("#dir-list").innerHTML = data.dirs.length
     ? data.dirs
         .map(
@@ -432,6 +433,15 @@ $("#dir-add").addEventListener("click", async () => {
     loadContentDirs();
   } catch (e) {
     alert("添加失败：" + e.message);
+  }
+});
+
+$("#backup-btn").addEventListener("click", async () => {
+  try {
+    const r = await api("/api/backup", { method: "POST" });
+    alert("备份完成：\n" + r.path);
+  } catch (e) {
+    alert("备份失败：" + e.message);
   }
 });
 

@@ -232,6 +232,13 @@ h2 { font-size: 16px; margin-bottom: 14px; }
   flex: 1; background: var(--card); border: 1px solid var(--line);
   color: var(--text); padding: 9px 12px; border-radius: 8px; font-size: 13px;
 }
+.data-dir-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--card); border: 1px solid var(--line);
+  padding: 10px 12px; border-radius: 8px; margin-bottom: 12px;
+}
+.data-dir-row .hint { margin: 0; font-size: 13px; color: var(--text); }
+#backup-btn { font-size: 12px; padding: 6px 14px; white-space: nowrap; }
 
 /* 课文（goldmark 渲染结果）排版 */
 .md-body { font-size: 13.5px; line-height: 1.9; color: var(--dim); }

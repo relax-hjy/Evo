@@ -1000,6 +1000,208 @@
    ],
    "answer": "B",
    "explanation": "|q|<1 收敛于 a/(1-q)；|q|≥1 发散（含 q=±1 时部分和不趋稳）。"
+  },
+  {
+   "skill": "Java",
+   "topic": "语言基础",
+   "leaf": "控制流与方法",
+   "type": "choice",
+   "stem": "以下关于 switch 语句的说法正确的是？",
+   "options": [
+    "case 分支执行完会自动跳出",
+    "忘记 break 会继续执行下一个 case（穿透）",
+    "switch 只能用于 int",
+    "default 分支必须放在最前"
+   ],
+   "answer": "B",
+   "explanation": "case 之间无 break 会穿透执行后续分支；JDK7+ 支持 String，default 位置任意但通常放最后。"
+  },
+  {
+   "skill": "Java",
+   "topic": "语言基础",
+   "leaf": "控制流与方法",
+   "type": "judge",
+   "stem": "Java 中方法的参数传递是按引用传递，因此方法内修改参数会影响调用方的原始变量。",
+   "options": [
+    "对",
+    "错"
+   ],
+   "answer": "错",
+   "explanation": "Java 只有值传递：引用类型传的是引用的副本。方法内改变副本指向不影响调用方（改变副本指向的对象内容则会，因为指向同一对象）。"
+  },
+  {
+   "skill": "Java",
+   "topic": "语言基础",
+   "leaf": "IO/NIO",
+   "type": "choice",
+   "stem": "NIO 中 Buffer 从写模式切换到读模式必须调用的方法是？",
+   "options": [
+    "clear()",
+    "flip()",
+    "compact()",
+    "reset()"
+   ],
+   "answer": "B",
+   "explanation": "flip() 把 limit 置为当前 position、position 归零，为读取做准备；读完用 clear()/compact() 复位。"
+  },
+  {
+   "skill": "Java",
+   "topic": "语言基础",
+   "leaf": "IO/NIO",
+   "type": "judge",
+   "stem": "用字节流复制含中文的文件时，可以先按字符读取再写入，效率更高且不会乱码。",
+   "options": [
+    "对",
+    "错"
+   ],
+   "answer": "错",
+   "explanation": "字节流按字节处理二进制数据，转字符流需显式指定编码；编码不一致或按字节切断多字节字符都会乱码，二进制文件应始终用字节流。"
+  },
+  {
+   "skill": "Java",
+   "topic": "语言基础",
+   "leaf": "变量与基本类型",
+   "type": "choice",
+   "stem": "String a=\"hello\"; String b=\"hello\"; 则 a==b 的结果是？",
+   "options": [
+    "false",
+    "true",
+    "编译错误",
+    "运行时异常"
+   ],
+   "answer": "B",
+   "explanation": "编译期字面量进入字符串常量池，a、b 指向同一池对象故 == 为 true；用 new String() 创建的则为 false——比较内容永远用 equals。"
+  },
+  {
+   "skill": "Java",
+   "topic": "语言基础",
+   "leaf": "集合框架",
+   "type": "choice",
+   "stem": "向 HashMap 存入自定义对象作为 key 时，必须正确重写哪两个方法才能保证查找正确？",
+   "options": [
+    "toString 与 equals",
+    "hashCode 与 equals",
+    "compareTo 与 equals",
+    "hashCode 与 toString"
+   ],
+   "answer": "B",
+   "explanation": "HashMap 桶定位靠 hashCode、桶内比较靠 equals；两者契约必须一致——hashCode 相等则 equals 必须为真，否则 key 查不到。"
+  },
+  {
+   "skill": "Java",
+   "topic": "语言基础",
+   "leaf": "接口与抽象类",
+   "type": "choice",
+   "stem": "下列关于抽象类与接口的说法正确的是？",
+   "options": [
+    "抽象类可以有构造方法供子类调用",
+    "接口可以有实例字段",
+    "抽象类中的方法必须全是抽象方法",
+    "一个类可以继承多个抽象类"
+   ],
+   "answer": "A",
+   "explanation": "接口字段隐式 public static final、类单继承、抽象类可含非抽象方法；构造方法是抽象类模板初始化的常用手段。"
+  },
+  {
+   "skill": "Java",
+   "topic": "语言基础",
+   "leaf": "泛型",
+   "type": "choice",
+   "stem": "List<String> 与 List<Integer> 在编译后的关系是？",
+   "options": [
+    "运行期仍是不同类型",
+    "类型擦除后为同一类型 List",
+    "前者被优化为数组",
+    "分别编译为不同类"
+   ],
+   "answer": "B",
+   "explanation": "Java 泛型靠类型擦除实现：编译后泛型信息被抹掉，两者同为原始类型 List，故不能 new T()、不能泛型数组。"
+  },
+  {
+   "skill": "Java",
+   "topic": "语言基础",
+   "leaf": "异常体系",
+   "type": "choice",
+   "stem": "自定义业务异常（如 InsufficientBalanceException）通常应该继承哪个类？",
+   "options": [
+    "Error",
+    "Exception",
+    "RuntimeException",
+    "Throwable"
+   ],
+   "answer": "C",
+   "explanation": "业务异常属非受检：调用方无法也不应被强制 try-catch（余额不足是业务分支而非程序故障），继承 RuntimeException 免去签名污染。"
+  },
+  {
+   "skill": "Java",
+   "topic": "并发编程",
+   "leaf": "线程与生命周期",
+   "type": "choice",
+   "stem": "调用线程对象的 start() 方法与直接调用 run() 方法的区别是？",
+   "options": [
+    "两者等价",
+    "start() 创建新线程执行，run() 只是当前线程的普通方法调用",
+    "start() 立即执行完才返回",
+    "run() 会创建新线程"
+   ],
+   "answer": "B",
+   "explanation": "start() 使线程进入就绪态由 JVM 调度，底层执行的才是 run()；直接调 run() 不开新线程，等于同步执行。"
+  },
+  {
+   "skill": "Java",
+   "topic": "并发编程",
+   "leaf": "synchronized 与锁",
+   "type": "judge",
+   "stem": "在一个线程持有对象锁调用 wait() 后，该线程会立即释放锁并进入等待池，直到被 notify/notifyAll 或超时唤醒。",
+   "options": [
+    "对",
+    "错"
+   ],
+   "answer": "对",
+   "explanation": "wait() 必须在同步块内调用，调用后释放锁并进入 WAITING 状态；被唤醒后还需重新竞争锁且必须重新判条件（while 循环）。"
+  },
+  {
+   "skill": "Java",
+   "topic": "并发编程",
+   "leaf": "AQS 与 ReentrantLock",
+   "type": "choice",
+   "stem": "ReentrantLock 相比 synchronized 不具备的能力是？",
+   "options": [
+    "可中断的锁等待",
+    "尝试获取锁 tryLock",
+    "内置在 JVM 字节码中自动释放",
+    "公平锁模式"
+   ],
+   "answer": "C",
+   "explanation": "synchronized 是字节码指令、退出同步块自动释放且无 tryLock/公平/超时/条件变量；ReentrantLock 需手动 lock/unlock（finally 保证）。"
+  },
+  {
+   "skill": "Java",
+   "topic": "并发编程",
+   "leaf": "并发容器与工具类",
+   "type": "choice",
+   "stem": "主线程要等待 N 个子任务全部完成后再汇总，最合适的工具是？",
+   "options": [
+    "CyclicBarrier",
+    "CountDownLatch",
+    "Semaphore",
+    "ReentrantLock"
+   ],
+   "answer": "B",
+   "explanation": "CountDownLatch 倒数计数、一次性、主线程 await 等待归零；Semaphore 管并发数；CyclicBarrier 是参与者互相等待且可重用。"
+  },
+  {
+   "skill": "Java",
+   "topic": "并发编程",
+   "leaf": "原子类与 CAS",
+   "type": "judge",
+   "stem": "CAS 操作不存在任何并发问题，可以放心替代所有锁场景。",
+   "options": [
+    "对",
+    "错"
+   ],
+   "answer": "错",
+   "explanation": "CAS 只保证单变量原子操作；ABA 问题、自旋开销、复合操作（check-then-act）仍需锁或版本号机制（AtomicStampedReference）。"
   }
  ]
 }

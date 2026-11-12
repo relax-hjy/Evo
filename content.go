@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -53,6 +54,27 @@ func setContentDirs(dirs []string) error {
 
 // ---------- 内容目录管理 API ----------
 
+// resolveContentDir 把存储值转成绝对路径：相对路径基于数据根（换机器/同步后不丢）
+func resolveContentDir(stored string) string {
+	if filepath.IsAbs(stored) {
+		return filepath.Clean(stored)
+	}
+	return filepath.Join(dataDir, stored)
+}
+
+// storeContentDir 位于数据根内的目录存相对路径（"." 或子目录），数据根外存绝对路径
+func storeContentDir(abs string) string {
+	abs = filepath.Clean(abs)
+	if rel, err := filepath.Rel(dataDir, abs); err == nil && rel != ".." &&
+		!strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if rel == "." {
+			return "."
+		}
+		return rel
+	}
+	return abs
+}
+
 type contentDirItem struct {
 	Path    string `json:"path"`
 	Exists  bool   `json:"exists"`
@@ -83,15 +105,16 @@ func contentDirsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		out := []contentDirItem{}
 		for _, p := range dirs {
-			st, err := os.Stat(p)
+			resolved := resolveContentDir(p)
+			st, err := os.Stat(resolved)
 			exists := err == nil && st.IsDir()
-			item := contentDirItem{Path: p, Exists: exists}
+			item := contentDirItem{Path: resolved, Exists: exists}
 			if exists {
-				item.Lessons = countLessons(p)
+				item.Lessons = countLessons(resolved)
 			}
 			out = append(out, item)
 		}
-		writeJSON(w, map[string]any{"dirs": out})
+		writeJSON(w, map[string]any{"data_dir": filepath.Clean(dataDir), "dirs": out})
 
 	case "POST":
 		var body struct {
@@ -121,12 +144,12 @@ func contentDirsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, d := range dirs {
-			if strings.EqualFold(filepath.Clean(d), filepath.Clean(abs)) {
+			if strings.EqualFold(resolveContentDir(d), filepath.Clean(abs)) {
 				jsonError(w, 409, "该目录已添加")
 				return
 			}
 		}
-		dirs = append(dirs, abs)
+		dirs = append(dirs, storeContentDir(abs))
 		if err := setContentDirs(dirs); err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -149,9 +172,10 @@ func contentDirsHandler(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		target := filepath.Clean(resolveContentDir(*body.Path))
 		kept := []string{}
 		for _, d := range dirs {
-			if !strings.EqualFold(filepath.Clean(d), filepath.Clean(*body.Path)) {
+			if !strings.EqualFold(resolveContentDir(d), target) {
 				kept = append(kept, d)
 			}
 		}
@@ -169,10 +193,19 @@ func contentDirsHandler(w http.ResponseWriter, r *http.Request) {
 
 // ---------- 节点课文解析 ----------
 
-// safeComponent 拒绝任何可能逃出内容根目录的路径片段
+// fnameRepl Windows 非法文件名字符 → 全角同形字符，让 "IO/NIO" 这类标题可落盘
+var fnameRepl = strings.NewReplacer(
+	"/", "／", "\\", "＼", ":", "：", "*", "＊",
+	"?", "？", "\"", "＂", "<", "＜", ">", "＞", "|", "｜",
+)
+
+// fileNameFor 节点标题 → 课文文件名（标题 + .md，非法字符全角化）
+func fileNameFor(title string) string { return fnameRepl.Replace(title) + ".md" }
+
+// safeComponent 拒绝空值与 "." ".."（分隔符已由 fileNameFor 全角化，无法逃逸）
 func safeComponent(s string) bool {
 	return s != "" && s != "." && s != ".." &&
-		!strings.ContainsAny(s, `/\:*?"<>|`) && filepath.Base(s) == s
+		!strings.ContainsAny(s, "\x00\n\r\t")
 }
 
 // nodePathParts 取 节点的 (技能名, 主题名, 标题)；非叶子（无父）返回 ok=false
@@ -203,11 +236,12 @@ func resolveNodeMarkdown(nodeID int64) (path string, raw string, found bool, err
 	if err != nil {
 		return "", "", false, err
 	}
-	rel := filepath.Join(skill, topic, title+".md")
+	rel := filepath.Join(skill, topic, fileNameFor(title))
 	for _, root := range roots {
-		cand := filepath.Join(root, rel)
+		resolved := resolveContentDir(root)
+		cand := filepath.Join(resolved, rel)
 		// 双保险：解析后的真实路径必须仍在根目录内
-		absRoot, e1 := filepath.Abs(root)
+		absRoot, e1 := filepath.Abs(resolved)
 		absCand, e2 := filepath.Abs(cand)
 		if e1 != nil || e2 != nil || !strings.HasPrefix(absCand, absRoot) {
 			continue
@@ -228,7 +262,7 @@ func hasMarkdownSet(skillName string) map[string]bool {
 		return set
 	}
 	for _, root := range roots {
-		skillDir := filepath.Join(root, skillName)
+		skillDir := filepath.Join(resolveContentDir(root), skillName)
 		if st, err := os.Stat(skillDir); err != nil || !st.IsDir() {
 			continue
 		}
@@ -276,4 +310,21 @@ func nodeMarkdownHandler(w http.ResponseWriter, r *http.Request) {
 		resp.HTML = sb.String()
 	}
 	writeJSON(w, resp)
+}
+
+// ---------- 快照备份 ----------
+
+// backupHandler POST /api/backup —— VACUUM INTO 生成一致性快照，运行中执行也安全
+func backupHandler(w http.ResponseWriter, r *http.Request) {
+	backupDir := filepath.Join(dataDir, "backup")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	dest := filepath.Join(backupDir, "evo-"+time.Now().Format("20060102-150405")+".db")
+	if _, err := db.Exec("VACUUM INTO ?", dest); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "path": dest})
 }

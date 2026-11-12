@@ -5,9 +5,9 @@ EVO 是本地单人「技能通关」学习系统：四项技能（Java / Go / �
 
 ## 技术栈
 - 前端：原生 HTML/CSS/JS 三件套（static/），无框架无构建
-- 后端：**现行 Python FastAPI（server.py）；Go 重写进行中（main.go / db.go，module evo）**
-- 数据库：SQLite 单文件 data.db（Python 与 Go 共用同 schema，Go 版不得改表结构）
-- 部署：start.bat（Python）→ 目标单个 evo.exe（Go 编译产物）
+- 后端：**Go evo.exe 现行（8765，M1-M6 完成）；Python FastAPI（server.py）保留为回滚路径**
+- 数据库：SQLite；**数据根 `D:\CloudDriver\EVO`（evo.json 配置 data_dir）**：data.db、课文 md、backup 快照全部收敛于此，可远程同步；仓库与数据根分离（代码走 GitHub，数据走同步盘）
+- 部署：start.bat → evo.exe；Go 版不得改动 data.db 表结构（与 Python 版兼容）
 
 ## 代码规范
 - 所有文件 UTF-8，界面文案中文
@@ -23,13 +23,17 @@ EVO 是本地单人「技能通关」学习系统：四项技能（Java / Go / �
 
 ## 目录结构
 ```
-EVO/
-  server.py / db.py / seed.py   # Python 版（现行）
-  main.go / db.go               # Go 版（重写中）
-  static/                       # 前端三件套
-  data.db                       # SQLite（gitignore）
-  docs/                         # 需求 / 技术设计 / 使用文档
-  AGENTS.md / 交付总结.md
+EVO/                          # 代码仓库（GitHub 同步）
+  main.go db.go api.go dashboard.go content.go seed.go  # Go 现行版
+  server.py db.py seed.py     # Python 回滚版
+  static/                     # 前端三件套（编译进 exe）
+  seed.json                   # 唯一数据源（技能树/例题/短文）
+  evo.json                    # 配置：data_dir 数据根路径
+  docs/ 示例内容已迁数据根/
+D:\CloudDriver\EVO\           # 数据根（远程同步盘，全量数据）
+  data.db                     # 进度/日志/作答/配置（唯一不可再生）
+  <技能>/<主题>/<知识点>.md     # 课文文件（content_dirs 存相对路径）
+  backup/evo-*.db             # VACUUM INTO 快照
 ```
 
 ## 核心业务规则（不可违反）
@@ -77,9 +81,9 @@ EVO/
 - 文档做了哪些更新
 - 建议下一轮做什么
 
-## 当前状态（2026-11-11）
-- Python 版：完整可用，已推送 GitHub
-- Go 重写：**教学模式进行中**——学习者手写代码、讲评由 AI 完成；AI 不要代写 Go 代码，只给要求/骨架/review，除非学习者明确要求代写（M1、M2 是学习者明确要求代写的）
-- 已完成：Go 1.27 安装、go mod init、hello 程序、M1 HTTP 骨架、M2 SQLite 打通（GET /api/skills）
-- 双跑中：Python 占 8765（在线系统），Go 测 8766；对拍完成后切换
-- 下一步：M3 GET /api/dashboard
+## 当前状态（2026-11-12）
+- Go 版 M1-M6 全部完成并接管 8765，已推送 GitHub（094a07e）；Python 保留回滚
+- 已交付：例题（24 道/双表判分）、知识点短文（95 篇，nodes.content）、教材基建（内容目录配置 + md 加载 + goldmark 渲染 + 快照备份）
+- 数据根迁移完成：data.db 与全部课文 md 收敛到 `D:\CloudDriver\EVO`，content_dirs 相对路径化（同步/换机器不丢），evo.json 配置数据根
+- 教学模式进行中：AI 不代写 Go 代码，除非学习者明确要求（M1/M2/内容生产为明确要求）
+- 下一步：教材内容生产 M7.2（深入级、按技能分批、学习者审校）；待办见 docs/EVO-需求.md

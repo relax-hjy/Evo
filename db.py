@@ -4,7 +4,26 @@ import os
 import sqlite3
 from datetime import datetime, date
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _data_dir():
+    """读 evo.json 的 data_dir（与 Go 版同一配置），缺省为项目目录。"""
+    import json
+    cfg = os.path.join(BASE_DIR, "evo.json")
+    if os.path.exists(cfg):
+        try:
+            with open(cfg, encoding="utf-8") as f:
+                d = json.load(f).get("data_dir", "")
+            if d:
+                os.makedirs(d, exist_ok=True)
+                return d
+        except Exception:
+            pass
+    return BASE_DIR
+
+
+DB_PATH = os.path.join(_data_dir(), "data.db")
 
 INTERVALS = [1, 2, 4, 7, 15, 30]  # 复习间隔（天），艾宾浩斯简化版
 

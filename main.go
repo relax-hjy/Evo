@@ -63,6 +63,7 @@ func main() {
 	mux.HandleFunc("/api/nodes/{id}/markdown", only("GET", nodeMarkdownHandler))
 	mux.HandleFunc("/api/questions/{id}/answer", only("POST", answerQuestionHandler))
 	mux.HandleFunc("/api/settings/content-dirs", contentDirsHandler)
+	mux.HandleFunc("/api/backup", only("POST", backupHandler))
 	mux.HandleFunc("/api/logs", logsHandler)
 	mux.HandleFunc("/api/milestones/{id}", only("POST", toggleMilestoneHandler))
 
