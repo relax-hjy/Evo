@@ -52,6 +52,53 @@
      ]
     },
     {
+     "title": "对象机制",
+     "evidence": "能解释反射与对象契约的运行期行为",
+     "leaves": [
+      [
+       "反射",
+       "能用反射获取 Class 并调用私有方法",
+       "【概念】反射在运行期动态获取类的信息、创建对象并操作成员，入口是 java.lang.Class 类。\n【要点】三种拿到 Class 的方式：Class.forName(全限定名)（动态加载，抛 ClassNotFoundException）、对象.getClass()、类名.class；常用操作是 getDeclaredConstructor().newInstance() 创建实例、getDeclaredMethod()+setAccessible(true) 调私有方法；Spring IoC、MyBatis 结果映射、JUnit 都建立在反射之上。\n【易错】反射绕过编译期检查、有明显性能开销，只该用在框架/工具场景；getMethods 含父类 public 方法而 getDeclaredMethods 只含本类；setAccessible 在 Java 9+ 模块化下对未开放模块会抛 InaccessibleObjectException。"
+      ],
+      [
+       "Object 与常用契约",
+       "能解释 equals/hashCode 契约及重写规则",
+       "【概念】java.lang.Object 是所有类的祖先，equals、hashCode、toString、clone 是最常重写的四个方法。\n【要点】equals 满足自反、对称、传递、一致且与 null 比较为 false；hashCode 与 equals 契约：equals 相等的两个对象哈希必须相等，HashMap/HashSet 依赖它定位桶；重写 equals 必须同时重写 hashCode，否则对象放进哈希集合会「丢」；toString 默认返回 类名@十六进制地址，调试应重写。\n【易错】== 比较的是引用地址而非值；String 等类重写了 equals，但数组和自定义类默认用地址比较；规范推荐用 Objects.equals 做空安全比较。"
+      ],
+      [
+       "序列化与文档注释",
+       "能说明 Serializable 版本兼容与 javadoc 规范",
+       "【概念】序列化把对象转成字节流以便持久化或网络传输；javadoc 是用 /** */ 注释生成 API 文档的规范。\n【要点】实现 Serializable 的类应显式声明 serialVersionUID，字段演进后旧版本字节流才能反序列化；transient 字段和 static 字段不参与序列化；反序列化不调用构造器，直接从字节流还原；javadoc 用 @param/@return/@throws 描述签名，类注释写用途与线程安全性。\n【易错】不声明 serialVersionUID 会按类结构自动生成，改字段名/方法签名就导致 InvalidClassException；反序列化不可信数据有远程代码执行风险，现代应用优先 JSON 等格式；原生序列化性能差且不跨语言。"
+      ]
+     ]
+    },
+    {
+     "title": "新特性",
+     "evidence": "能用 Lambda/Stream 与时间库改写常见代码",
+     "leaves": [
+      [
+       "Lambda 与函数式接口",
+       "能用 Lambda 与方法引用替换匿名类",
+       "【概念】Lambda 是匿名函数的简写，只能赋给函数式接口（有且仅有一个抽象方法的接口）的变量。\n【要点】内置函数式接口四大件：Function<T,R>（转换）、Predicate<T>（判断）、Consumer<T>（消费）、Supplier<T>（供给）；方法引用三种写法：静态方法 类::方法、实例方法 对象::方法、构造器 类::new；default 方法让接口可以演进而不破坏实现类。\n【易错】Lambda 捕获的外部变量必须是 effectively final（不重新赋值）；单参数可省略括号 x ->，但无参数必须写 ()、多参数必须带括号；重载方法遇到 Lambda 实参可能产生歧义。"
+      ],
+      [
+       "Stream 与 Optional",
+       "能写出惰性 Stream 管道并用 Optional 消除 null",
+       "【概念】Stream 是数据源上的一串惰性操作，只描述做什么、不立刻执行；Optional 是装值或空的容器，强制调用方处理「可能没有」的情况。\n【要点】中间操作 filter/map/flatMap/sorted/distinct/limit 都是懒的，遇到终结操作 collect/forEach/reduce/count 才执行；Collectors 提供 toList/toMap/groupingBy/joining 等收集器；Optional 用 ofNullable 接入、map/filter 链式处理、orElse/orElseGet/orElseThrow 终结。\n【易错】Stream 只能消费一次，用过的流再操作抛 IllegalStateException；map 不会修改原集合内容（要改类型得返回新对象）；orElse 的默认值无论有没有值都会先算出来，默认值开销大时用 orElseGet；Optional 只该用在返回值上，别当字段/参数用。"
+      ],
+      [
+       "日期时间与 java.time",
+       "能用 LocalDate/Instant/DateTimeFormatter 处理时间",
+       "【概念】JDK 8 引入 java.time 包，提供不可变、线程安全的日期时间 API，取代 Date/Calendar/SimpleDateFormat。\n【要点】按用途选型：LocalDate 只日期、LocalTime 只时间、LocalDateTime 日期+时间、Instant 时间戳（UTC 纳秒精度）、ZonedDateTime 带时区；运算用 plusDays/with 等返回新对象，间隔用 Duration（时间）与 Period（日期）；格式化用线程安全的 DateTimeFormatter，解析用 parse。\n【易错】LocalDateTime 不带时区，不能代表全球唯一的时刻，跨时区换算要用 Instant 或 ZonedDateTime；Instant 与 Date 互转 Date.from(instant)/date.toInstant()；旧的 SimpleDateFormat 非线程安全，多线程共享会串日期。"
+      ],
+      [
+       "模块化与常用类库",
+       "能说出 JPMS 目的与常用工具类的选型",
+       "【概念】Java 9 引入 JPMS 模块系统，用 module-info.java 显式声明模块的依赖与导出；常用类库指 java.util 等包里的通用工具类。\n【要点】module-info.java 用 requires 声明依赖、exports 声明对外开放的包、opens 允许反射访问；模块化带来强封装与运行时裁剪（jlink）；常用工具：Objects（空安全 equals/hash）、Arrays（sort/binarySearch/fill）、Collections（sort/synchronizedList/unmodifiableList）、BigDecimal/BigInteger 高精度计算。\n【易错】未 exports 的包外部不可见、未 opens 的模块反射调用抛 InaccessibleObjectException（老框架迁移常见坑）；unmodifiableList 只是只读视图不是副本，原列表改了视图跟着变；BigDecimal 比较大小用 compareTo 而非 equals（scale 不同 equals 为 false）。"
+      ]
+     ]
+    },
+    {
      "title": "并发编程",
      "evidence": "能独立编写并解释多线程程序",
      "leaves": [
