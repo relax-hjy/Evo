@@ -60,6 +60,8 @@ type answerResult struct {
 	Answer      string    `json:"answer"`
 	Explanation string    `json:"explanation"`
 	Stats       nodeStats `json:"stats"`
+	Mastery     float64   `json:"mastery"`     // 作答后的掌握度（自动评价可能已升档）
+	AutoScored  bool      `json:"auto_scored"` // 本次作答触发了自动升档
 }
 
 type okResponse struct {
@@ -226,10 +228,13 @@ func skillTreeHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
+// nodeStatsOf 统计节点的「每题最近一次作答」口径：attempted 为已作答题目数（按题去重），
+// correct 为其中最近一次判对的题数——重刷错题按最新结果计，不被历史累计稀释
 func nodeStatsOf(nodeID int64) (nodeStats, error) {
 	var s nodeStats
 	err := db.QueryRow(
-		"SELECT COUNT(*), COALESCE(SUM(correct),0) FROM answers WHERE node_id=?",
+		`SELECT COUNT(*), COALESCE(SUM(correct),0) FROM answers
+		WHERE id IN (SELECT MAX(id) FROM answers WHERE node_id=? GROUP BY question_id)`,
 		nodeID).Scan(&s.Attempted, &s.Correct)
 	return s, err
 }
@@ -339,8 +344,26 @@ func answerQuestionHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, answerResult{OK: true, Correct: correct, Answer: answer,
-		Explanation: explanation, Stats: stats})
+
+	n, err := loadNode(nodeID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	res := answerResult{OK: true, Correct: correct, Answer: answer,
+		Explanation: explanation, Stats: stats, Mastery: n.Mastery}
+	if target := autoTargetMastery(stats); target > n.Mastery {
+		rate := int(float64(stats.Correct)/float64(stats.Attempted)*100 + 0.5)
+		evidence := fmt.Sprintf("例题自动评价：已作答 %d 题、当前正确率 %d%%，达 %d 分档",
+			stats.Attempted, rate, int(target))
+		if _, err := applyScore(nodeID, target, evidence); err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		res.Mastery = target
+		res.AutoScored = true
+	}
+	writeJSON(w, res)
 }
 
 func addNodeHandler(w http.ResponseWriter, r *http.Request) {
@@ -403,6 +426,49 @@ func deleteNodeHandler(w http.ResponseWriter, r *http.Request) {
 
 // ---------- 打分（唯一能提升掌握度的入口） ----------
 
+// applyScore 执行打分：更新掌握度与复习节奏并写证据日志；
+// HTTP 打分与例题自动评价共用（自动评价也必须留证据）
+func applyScore(id int64, mastery float64, evidence string) (scoreResponse, error) {
+	n, err := loadNode(id)
+	if err != nil {
+		return scoreResponse{}, err
+	}
+
+	now := time.Now()
+	ts := now.Format("2006-01-02")
+	stage := n.ReviewStage
+	var nxt time.Time
+	if mastery >= n.Mastery { // 提分或持平 → 按节奏安排复习
+		if n.LastVerifiedAt == nil || *n.LastVerifiedAt != ts {
+			if n.Mastery > 0 {
+				stage = min(stage+1, int64(len(reviewIntervals)-1))
+			} else {
+				stage = 0
+			}
+		}
+		nxt = now.AddDate(0, 0, int(reviewIntervals[stage]))
+	} else { // 降档则重置复习节奏
+		stage = 0
+		nxt = now.AddDate(0, 0, 1)
+	}
+	nxtStr := nxt.Format("2006-01-02")
+
+	if _, err := db.Exec(
+		`UPDATE nodes SET mastery=?, review_stage=?, last_verified_at=?, next_review_at=? WHERE id=?`,
+		mastery, stage, ts, nxtStr, id); err != nil {
+		return scoreResponse{}, err
+	}
+	if evidence != "" {
+		if _, err := db.Exec(
+			"INSERT INTO logs(created_at, node_id, skill_id, type, content) VALUES(?,?,?,'study',?)",
+			time.Now().Format("2006-01-02T15:04:05"), id, n.SkillID,
+			fmt.Sprintf("[打分 %d] %s：%s", int(mastery), n.Title, evidence)); err != nil {
+			return scoreResponse{}, err
+		}
+	}
+	return scoreResponse{OK: true, NextReview: nxtStr, Stage: stage}, nil
+}
+
 func scoreNodeHandler(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -420,7 +486,7 @@ func scoreNodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n, err := loadNode(id)
+	resp, err := applyScore(id, *body.Mastery, body.Evidence)
 	if err == sql.ErrNoRows {
 		jsonError(w, http.StatusNotFound, "节点不存在")
 		return
@@ -429,42 +495,27 @@ func scoreNodeHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	writeJSON(w, resp)
+}
 
-	now := time.Now()
-	ts := now.Format("2006-01-02")
-	stage := n.ReviewStage
-	var nxt time.Time
-	if *body.Mastery >= n.Mastery { // 提分或持平 → 按节奏安排复习
-		if n.LastVerifiedAt == nil || *n.LastVerifiedAt != ts {
-			if n.Mastery > 0 {
-				stage = min(stage+1, int64(len(reviewIntervals)-1))
-			} else {
-				stage = 0
-			}
-		}
-		nxt = now.AddDate(0, 0, int(reviewIntervals[stage]))
-	} else { // 降档则重置复习节奏
-		stage = 0
-		nxt = now.AddDate(0, 0, 1)
-	}
-	nxtStr := nxt.Format("2006-01-02")
+// ---------- 例题自动评价 ----------
 
-	if _, err := db.Exec(
-		`UPDATE nodes SET mastery=?, review_stage=?, last_verified_at=?, next_review_at=? WHERE id=?`,
-		*body.Mastery, stage, ts, nxtStr, id); err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
-		return
+// autoTargetMastery 按作答情况算目标掌握度档位（只升不降的下限）：
+// 题量与正确率双达标才给档，避免少量题刷出高分；题量按 100 题整卷标定
+func autoTargetMastery(s nodeStats) float64 {
+	if s.Attempted == 0 {
+		return 0
 	}
-	if body.Evidence != "" {
-		if _, err := db.Exec(
-			"INSERT INTO logs(created_at, node_id, skill_id, type, content) VALUES(?,?,?,'study',?)",
-			time.Now().Format("2006-01-02T15:04:05"), id, n.SkillID,
-			fmt.Sprintf("[打分 %d] %s：%s", int(*body.Mastery), n.Title, body.Evidence)); err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+	rate := float64(s.Correct) / float64(s.Attempted)
+	switch {
+	case s.Attempted >= 80 && rate >= 0.95:
+		return 95
+	case s.Attempted >= 50 && rate >= 0.80:
+		return 80
+	case s.Attempted >= 30 && rate >= 0.60:
+		return 60
 	}
-	writeJSON(w, scoreResponse{OK: true, NextReview: nxtStr, Stage: stage})
+	return 0
 }
 
 // ---------- 复习确认 ----------

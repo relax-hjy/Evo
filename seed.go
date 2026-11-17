@@ -219,33 +219,72 @@ func maybeSeed() error {
 	return tx.Commit()
 }
 
-// backfillQuestions 老库升级：已有技能数据但没题目时，按 seed.json 路径补插例题
+// backfillQuestions 老库升级：按 seed.json 增量补插例题——(node_id, stem) 去重，
+// 题库扩容后老库启动即补齐，重复启动幂等
 func backfillQuestions() error {
-	var n int
-	if err := db.QueryRow("SELECT COUNT(*) FROM questions").Scan(&n); err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
-
 	var data seedData
 	if err := json.Unmarshal(seedJSON, &data); err != nil {
 		return fmt.Errorf("parse seed.json: %w", err)
 	}
-	for i, q := range data.Questions {
+
+	// 已有题目按节点去重，并算出各节点 order_index 接续点（新题追加在尾部）
+	existing := map[int64]map[string]bool{}
+	nextOrder := map[int64]int64{}
+	rows, err := db.Query(`SELECT node_id, stem, order_index FROM questions`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var nid, oi int64
+		var stem string
+		if err := rows.Scan(&nid, &stem, &oi); err != nil {
+			rows.Close()
+			return err
+		}
+		if existing[nid] == nil {
+			existing[nid] = map[string]bool{}
+		}
+		existing[nid][stem] = true
+		if oi+1 > nextOrder[nid] {
+			nextOrder[nid] = oi + 1
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	type leafKey struct{ skill, topic, leaf string }
+	leafIDs := map[leafKey]int64{}
+	lookup := func(k leafKey) (int64, error) {
+		if lid, ok := leafIDs[k]; ok {
+			return lid, nil
+		}
 		var lid int64
 		err := db.QueryRow(`SELECT n.id FROM nodes n
 			JOIN skills s ON s.id = n.skill_id
 			JOIN nodes t ON t.id = n.parent_id
 			WHERE s.name=? AND t.title=? AND n.title=?`,
-			q.Skill, q.Topic, q.Leaf).Scan(&lid)
+			k.skill, k.topic, k.leaf).Scan(&lid)
+		if err != nil {
+			return 0, err
+		}
+		leafIDs[k] = lid
+		return lid, nil
+	}
+
+	for i, q := range data.Questions {
+		k := leafKey{q.Skill, q.Topic, q.Leaf}
+		lid, err := lookup(k)
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("question %d references unknown leaf: %s/%s/%s",
 				i, q.Skill, q.Topic, q.Leaf)
 		}
 		if err != nil {
 			return err
+		}
+		if existing[lid][q.Stem] {
+			continue
 		}
 		opts, err := marshalOptions(q.Options)
 		if err != nil {
@@ -254,9 +293,14 @@ func backfillQuestions() error {
 		if _, err := db.Exec(
 			`INSERT INTO questions(node_id, type, stem, options, answer, explanation, order_index)
 			 VALUES(?,?,?,?,?,?,?)`,
-			lid, q.Type, q.Stem, opts, q.Answer, q.Explanation, i); err != nil {
+			lid, q.Type, q.Stem, opts, q.Answer, q.Explanation, nextOrder[lid]); err != nil {
 			return fmt.Errorf("insert question %d: %w", i, err)
 		}
+		if existing[lid] == nil {
+			existing[lid] = map[string]bool{}
+		}
+		existing[lid][q.Stem] = true
+		nextOrder[lid]++
 	}
 	return nil
 }

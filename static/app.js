@@ -303,11 +303,11 @@ $("#add-node-btn").addEventListener("click", async () => {
 });
 
 /* ---------- 例题答题 ---------- */
-let quiz = { node: null, items: [], idx: 0, results: {}, stats: null };
+let quiz = { node: null, items: [], idx: 0, results: {}, stats: null, autoScored: null };
 
 async function openQuiz(node) {
   const data = await api(`/api/nodes/${node.id}/questions`);
-  quiz = { node, items: data.questions, idx: 0, results: {}, stats: data.stats };
+  quiz = { node, items: data.questions, idx: 0, results: {}, stats: data.stats, autoScored: null };
   $("#quiz-title").textContent = `例题：${node.title}`;
   $("#quiz-score-btn").classList.add("hidden");
   $("#quiz-modal").classList.remove("hidden");
@@ -317,8 +317,12 @@ async function openQuiz(node) {
 function quizStatsText() {
   const s = quiz.stats;
   const rate = s.attempted ? Math.round((s.correct / s.attempted) * 100) : null;
-  return `本知识点累计作答 ${s.attempted} 次 · 答对 ${s.correct} 次` +
+  let text = `本知识点已作答 ${s.attempted} 题 · 当前答对 ${s.correct} 题` +
     (rate !== null ? `（正确率 ${rate}%）` : "");
+  if (quiz.autoScored !== null) {
+    text += ` · 掌握度已自动提升至 ${quiz.autoScored} 分`;
+  }
+  return text;
 }
 
 function renderQuestion() {
@@ -328,7 +332,11 @@ function renderQuestion() {
   $("#quiz-progress").textContent = `第 ${quiz.idx + 1} / ${quiz.items.length} 题`;
 
   const letter = (i) => (q.type === "judge" ? q.options[i] : "ABCD"[i]);
-  let html = `<div class="quiz-stem">${quiz.idx + 1}. ${q.stem}</div><div class="quiz-opts">`;
+  let html = `<div class="quiz-stem">${quiz.idx + 1}. ${q.stem}</div>`;
+  if (!res && q.last_correct !== null) {
+    html += `<div class="quiz-last ${q.last_correct ? "last-ok" : "last-no"}">上次${q.last_correct ? "答对" : "答错"}</div>`;
+  }
+  html += `<div class="quiz-opts">`;
   q.options.forEach((opt, i) => {
     let cls = "";
     if (res) {
@@ -369,13 +377,22 @@ async function submitAnswer(q, letter) {
   });
   quiz.results[q.id] = { correct: res.correct, chosen: letter, explanation: res.explanation };
   quiz.stats = res.stats;
+  if (res.auto_scored) quiz.autoScored = res.mastery;
   renderQuestion();
   if (Object.keys(quiz.results).length === quiz.items.length) {
     $("#quiz-score-btn").classList.remove("hidden");
   }
 }
 
-$("#quiz-close").addEventListener("click", () => $("#quiz-modal").classList.add("hidden"));
+$("#quiz-close").addEventListener("click", () => {
+  $("#quiz-modal").classList.add("hidden");
+  if (quiz.autoScored !== null) {
+    // 自动升档发生在弹窗内，关闭时刷新看板与技能树上的掌握度
+    renderDashboard();
+    if (!$("#view-tree").classList.contains("hidden")) renderTree();
+    quiz.autoScored = null;
+  }
+});
 $("#quiz-score-btn").addEventListener("click", () => {
   const right = Object.values(quiz.results).filter((r) => r.correct).length;
   $("#quiz-modal").classList.add("hidden");

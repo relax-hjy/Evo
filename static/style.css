@@ -613,6 +613,16 @@ input:focus, select:focus, textarea:focus {
   font-variant-numeric: tabular-nums;
 }
 .quiz-stem { font-size: var(--font-body); line-height: 1.7; margin-bottom: 14px; }
+.quiz-last {
+  display: inline-block;
+  font-size: var(--font-meta);
+  padding: 2px 8px;
+  margin: -6px 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+.last-ok { color: var(--success); border-color: var(--success-border); background: var(--success-subtle); }
+.last-no { color: var(--danger); border-color: var(--danger-border); background: var(--danger-subtle); }
 .quiz-opts button {
   display: block;
   width: 100%;
