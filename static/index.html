@@ -4,19 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EVO · 技能通关系统</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Host+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
-  <div class="logo">🎯 EVO</div>
+  <h1 class="logo">EVO<span class="en">技能通关系统 · Go 版</span></h1>
   <nav>
     <button class="nav-btn active" data-view="dashboard">看板</button>
     <button class="nav-btn" data-view="tree">技能树</button>
     <button class="nav-btn" data-view="review">复习 <span id="due-badge" class="badge hidden">0</span></button>
     <button class="nav-btn" data-view="logs">日志</button>
   </nav>
-  <div class="streak" id="streak">🔥 0 天</div>
-  <button id="settings-btn" class="btn ghost" title="课文内容目录设置">📁 目录</button>
+  <div class="streak" id="streak">0 天连续</div>
+  <button id="settings-btn" class="btn ghost" title="课文内容目录设置">目录</button>
 </header>
 
 <main>
@@ -25,13 +28,13 @@
     <div id="skill-cards" class="cards"></div>
 
     <div class="panel">
-      <h2>📌 今日任务 <span class="hint">系统按「复习到期 → 低分推进 → 新内容」自动排序</span></h2>
-      <div id="today-tasks"></div>
+      <h2>今日任务 <span class="hint">系统按「复习到期 → 低分推进 → 新内容」自动排序</span></h2>
+      <div id="today-tasks" class="panel-body"></div>
     </div>
 
     <div class="panel">
-      <h2>🏁 里程碑</h2>
-      <div id="milestones"></div>
+      <h2>里程碑</h2>
+      <div id="milestones" class="panel-body"></div>
     </div>
   </section>
 
@@ -48,7 +51,7 @@
   <section id="view-review" class="view hidden">
     <div class="panel">
       <h2>到期复习 <span class="hint">先自测再看结果：≥80 拉长间隔，&lt;60 降档重来</span></h2>
-      <div id="review-list"></div>
+      <div id="review-list" class="panel-body"></div>
     </div>
   </section>
 
@@ -62,9 +65,25 @@
         <button id="log-submit" class="btn">记录</button>
       </div>
     </div>
-    <div class="panel"><h2>学习日志</h2><div id="log-list"></div></div>
+    <div class="panel"><h2>学习日志</h2><div id="log-list" class="panel-body"></div></div>
   </section>
 </main>
+
+<!-- ===== 课文阅读页 ===== -->
+<div id="reader" class="reader hidden">
+  <div class="reader-top">
+    <button id="reader-back" class="btn ghost">← 返回</button>
+    <div class="reader-headings">
+      <div id="reader-title" class="reader-title"></div>
+      <div id="reader-path" class="reader-path"></div>
+    </div>
+  </div>
+  <div class="reader-progress"><i id="reader-bar"></i></div>
+  <div class="reader-body" id="reader-body">
+    <aside class="reader-toc hidden" id="reader-toc"></aside>
+    <article class="md-view" id="reader-content"></article>
+  </div>
+</div>
 
 <!-- ===== 打分弹窗 ===== -->
 <div id="modal" class="modal hidden">

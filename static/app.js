@@ -34,7 +34,7 @@ $$(".nav-btn").forEach((b) =>
 async function renderDashboard() {
   const d = await api("/api/dashboard");
   skills = d.skills;
-  $("#streak").textContent = `🔥 ${d.streak} 天`;
+  $("#streak").textContent = `${d.streak} 天连续`;
   const badge = $("#due-badge");
   badge.textContent = d.due_reviews.length;
   badge.classList.toggle("hidden", d.due_reviews.length === 0);
@@ -93,7 +93,7 @@ async function renderDashboard() {
 }
 
 function skillColor(name) {
-  return skills.find((s) => s.name === name)?.color || "#8b97b3";
+  return skills.find((s) => s.name === name)?.color || "#777b85";
 }
 
 /* ---------- 技能树 ---------- */
@@ -101,8 +101,7 @@ async function renderTree() {
   if (!currentSkill) currentSkill = skills[0]?.id;
   $("#skill-tabs").innerHTML = skills
     .map(
-      (s) => `<button class="tab ${s.id === currentSkill ? "active" : ""}"
-        style="${s.id === currentSkill ? `background:${s.color}` : ""}" data-id="${s.id}">${s.name}</button>`
+      (s) => `<button class="tab ${s.id === currentSkill ? "active" : ""}" data-id="${s.id}">${s.name}</button>`
     )
     .join("");
   $$("#skill-tabs .tab").forEach((t) =>
@@ -133,7 +132,7 @@ async function renderTree() {
             .map(
               (l) => `
             <div class="leaf">
-              <span class="l-title" title="点击展开/收起知识点正文">${l.title}</span>
+              <span class="l-title" title="${l.has_markdown ? "点击进入课文阅读页" : "点击展开/收起知识点正文"}">${l.title}</span>
               <span class="l-ev">${l.evidence}</span>
               <div class="mini-bar"><i style="width:${l.mastery}%;background:${barColor(l.mastery)}"></i></div>
               <span class="status-chip s-${l.status}">${l.status}</span>
@@ -158,20 +157,14 @@ async function renderTree() {
   $$("#tree-body .q-btn").forEach((b) =>
     b.addEventListener("click", () => openQuiz(JSON.parse(b.dataset.node)))
   );
-  // 点知识点标题 → 展开/收起正文（有 md 课文的节点按需拉取并渲染）
+  // 点知识点标题：有 md 课文 → 跳转课文阅读页；无 → 展开/收起摘要
   $$("#tree-body .l-title").forEach((t) =>
     t.addEventListener("click", async () => {
       const panel = t.closest(".leaf").nextElementSibling;
       if (!panel || !panel.classList.contains("leaf-content")) return;
-      const expanding = panel.classList.contains("hidden");
-      if (expanding && panel.dataset.md === "1" && !panel.dataset.loaded) {
-        try {
-          const md = await api(`/api/nodes/${panel.dataset.id}/markdown`);
-          if (md.found) {
-            panel.innerHTML = `<div class="md-body">${md.html}</div>`;
-            panel.dataset.loaded = "1";
-          }
-        } catch (e) { /* 拉取失败则回落到卡片摘要 */ }
+      if (panel.dataset.md === "1") {
+        const opened = await openReader({ id: +panel.dataset.id, title: t.textContent.trim() });
+        if (opened) return;
       }
       panel.classList.toggle("hidden");
     })
@@ -191,10 +184,11 @@ function renderContent(content) {
 }
 
 function barColor(m) {
-  if (m >= 80) return "#2ecc71";
-  if (m >= 60) return "#f1c40f";
-  if (m > 0) return "#4f8cff";
-  return "#2a3550";
+  if (m >= 95) return "#8fd6ae";
+  if (m >= 80) return "#65b98f";
+  if (m >= 60) return "#d6a85f";
+  if (m > 0) return "#7ea1dc";
+  return "rgba(255,255,255,0.08)";
 }
 
 /* ---------- 打分弹窗 ---------- */
@@ -450,6 +444,149 @@ function escapeHtml(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
   );
 }
+
+/* ---------- 课文阅读页 ---------- */
+let tocHeads = [];
+
+async function openReader(node) {
+  let md;
+  try {
+    md = await api(`/api/nodes/${node.id}/markdown`);
+  } catch (e) {
+    return false;
+  }
+  if (!md.found) return false;
+  $("#reader-title").textContent = node.title;
+  $("#reader-path").textContent = md.path || "";
+  const box = $("#reader-content");
+  box.innerHTML = md.html;
+  decorateMd(box);
+  buildToc(box);
+  $("#reader").classList.remove("hidden");
+  $("#reader-body").scrollTop = 0;
+  updateReaderProgress();
+  return true;
+}
+
+// 给 goldmark 产物补交互：标题锚点、代码块包装（语言标签/复制/高亮）、表格滚动包装
+function decorateMd(box) {
+  box.querySelectorAll("h1,h2,h3,h4").forEach((h, i) => (h.id = `md-h-${i}`));
+  box.querySelectorAll("pre").forEach((pre) => {
+    const code = pre.querySelector("code");
+    const langCls = code ? [...code.classList].find((c) => c.startsWith("language-")) : null;
+    const lang = langCls ? langCls.slice(9) : "";
+    if (code && HL_KW[lang]) code.innerHTML = highlight(code.textContent, lang);
+
+    const wrap = document.createElement("div");
+    wrap.className = "codeblock";
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    if (lang) {
+      const tag = document.createElement("span");
+      tag.className = "code-lang";
+      tag.textContent = lang;
+      wrap.appendChild(tag);
+    }
+    const btn = document.createElement("button");
+    btn.className = "copy-btn";
+    btn.textContent = "复制";
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(code ? code.textContent : pre.textContent);
+      } catch (e) { /* 剪贴板不可用时静默 */ }
+      btn.textContent = "已复制";
+      setTimeout(() => (btn.textContent = "复制"), 1500);
+    });
+    wrap.appendChild(btn);
+  });
+  box.querySelectorAll("table").forEach((t) => {
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    t.parentNode.insertBefore(wrap, t);
+    wrap.appendChild(t);
+  });
+}
+
+function buildToc(box) {
+  tocHeads = [...box.querySelectorAll("h1,h2,h3")];
+  const toc = $("#reader-toc");
+  if (tocHeads.length < 2) {
+    toc.classList.add("hidden");
+    return;
+  }
+  toc.classList.remove("hidden");
+  toc.innerHTML =
+    `<div class="toc-title">目 录</div>` +
+    tocHeads
+      .map((h, i) => `<a class="toc-l${h.tagName[1]}" data-i="${i}">${escapeHtml(h.textContent)}</a>`)
+      .join("");
+  toc.querySelectorAll("a").forEach((a) =>
+    a.addEventListener("click", () =>
+      tocHeads[+a.dataset.i].scrollIntoView({ behavior: "smooth", block: "start" })
+    )
+  );
+}
+
+function updateReaderProgress() {
+  const el = $("#reader-body");
+  const max = el.scrollHeight - el.clientHeight;
+  $("#reader-bar").style.width = max > 0 ? (el.scrollTop / max) * 100 + "%" : "0";
+  if (!tocHeads.length) return;
+  const top = el.getBoundingClientRect().top;
+  let active = 0;
+  tocHeads.forEach((h, i) => {
+    if (h.getBoundingClientRect().top - top <= 90) active = i;
+  });
+  $$("#reader-toc a").forEach((a, i) => a.classList.toggle("active", i === active));
+}
+
+/* 代码高亮：状态机切分 注释/字符串/数字/关键字，避免正则叠加重伤字符串内部 */
+const HL_KW = {
+  java: "abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|return|short|static|super|switch|synchronized|this|throw|throws|transient|try|var|void|volatile|while|true|false|null|record|sealed|permits",
+  go: "break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var|true|false|nil|iota",
+  js: "async|await|break|case|catch|class|const|continue|default|delete|do|else|export|extends|finally|for|function|if|import|in|instanceof|let|new|of|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield|true|false|null|undefined",
+  ts: "async|await|break|case|catch|class|const|continue|default|delete|do|else|enum|export|extends|finally|for|from|function|if|implements|import|in|instanceof|interface|let|namespace|new|of|private|protected|public|readonly|return|static|super|switch|this|throw|try|type|typeof|var|void|while|yield|true|false|null|undefined",
+  python: "and|as|assert|async|await|break|class|continue|def|del|elif|else|except|False|finally|for|from|global|if|import|in|is|lambda|None|nonlocal|not|or|pass|raise|return|True|try|while|with|yield",
+};
+HL_KW.javascript = HL_KW.js;
+HL_KW.typescript = HL_KW.ts;
+HL_KW.c = HL_KW.cpp = HL_KW.java;
+
+function highlight(src, lang) {
+  const kw = HL_KW[lang];
+  if (!kw) return escapeHtml(src);
+  const hashComment = lang === "python";
+  const lineCom = hashComment ? "#[^\\n]*" : "//[^\\n]*";
+  const re = new RegExp(
+    `(${lineCom}|/\\*[\\s\\S]*?\\*/|"(?:\\\\.|[^"\\\\\\n])*"|'(?:\\\\.|[^'\\\\\\n])*')|(\\d+(?:\\.\\d+)?)|([A-Za-z_]\\w*)`,
+    "g"
+  );
+  const kwSet = new Set(kw.split("|"));
+  let out = "";
+  let last = 0;
+  for (const m of src.matchAll(re)) {
+    out += escapeHtml(src.slice(last, m.index));
+    if (m[1]) {
+      const cls = m[1].startsWith("//") || m[1].startsWith("/*") || m[1].startsWith("#") ? "hl-com" : "hl-str";
+      out += `<span class="${cls}">${escapeHtml(m[1])}</span>`;
+    } else if (m[2]) {
+      out += `<span class="hl-num">${escapeHtml(m[2])}</span>`;
+    } else {
+      const w = m[3];
+      out += kwSet.has(w) ? `<span class="hl-kw">${escapeHtml(w)}</span>` : escapeHtml(w);
+    }
+    last = m.index + m[0].length;
+  }
+  out += escapeHtml(src.slice(last));
+  return out;
+}
+
+$("#reader-back").addEventListener("click", () => $("#reader").classList.add("hidden"));
+$("#reader-body").addEventListener("scroll", updateReaderProgress);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#reader").classList.contains("hidden"))
+    $("#reader").classList.add("hidden");
+});
 
 /* ---------- 启动 ---------- */
 renderDashboard();
